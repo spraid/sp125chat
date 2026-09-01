@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedNearbyRouteImport } from './routes/_authenticated/nearby'
+import { Route as AuthenticatedRequestsRouteImport } from './routes/_authenticated/requests'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -27,27 +28,40 @@ const AuthenticatedNearbyRoute = AuthenticatedNearbyRouteImport.update({
   path: '/nearby',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedRequestsRoute = AuthenticatedRequestsRouteImport.update({
+  id: '/requests',
+  path: '/requests',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/nearby': typeof AuthenticatedNearbyRoute
+  '/requests': typeof AuthenticatedRequestsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/nearby': typeof AuthenticatedNearbyRoute
+  '/requests': typeof AuthenticatedRequestsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/_authenticated/nearby': typeof AuthenticatedNearbyRoute
+  '/_authenticated/requests': typeof AuthenticatedRequestsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/nearby'
+  fullPaths: '/' | '/nearby' | '/requests'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/nearby'
-  id: '__root__' | '/' | '/_authenticated' | '/_authenticated/nearby'
+  to: '/' | '/nearby' | '/requests'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/_authenticated/nearby'
+    | '/_authenticated/requests'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -78,15 +92,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedNearbyRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/requests': {
+      id: '/_authenticated/requests'
+      path: '/requests'
+      fullPath: '/requests'
+      preLoaderRoute: typeof AuthenticatedRequestsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedNearbyRoute: typeof AuthenticatedNearbyRoute
+  AuthenticatedRequestsRoute: typeof AuthenticatedRequestsRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedNearbyRoute: AuthenticatedNearbyRoute,
+  AuthenticatedRequestsRoute: AuthenticatedRequestsRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
