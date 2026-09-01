@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthenticatedChatsRouteImport } from './routes/_authenticated/chats'
 import { Route as AuthenticatedNearbyRouteImport } from './routes/_authenticated/nearby'
 import { Route as AuthenticatedRequestsRouteImport } from './routes/_authenticated/requests'
 
@@ -22,6 +23,11 @@ const IndexRoute = IndexRouteImport.update({
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedChatsRoute = AuthenticatedChatsRouteImport.update({
+  id: '/chats',
+  path: '/chats',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedNearbyRoute = AuthenticatedNearbyRouteImport.update({
   id: '/nearby',
@@ -36,11 +42,13 @@ const AuthenticatedRequestsRoute = AuthenticatedRequestsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/chats': typeof AuthenticatedChatsRoute
   '/nearby': typeof AuthenticatedNearbyRoute
   '/requests': typeof AuthenticatedRequestsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/chats': typeof AuthenticatedChatsRoute
   '/nearby': typeof AuthenticatedNearbyRoute
   '/requests': typeof AuthenticatedRequestsRoute
 }
@@ -48,18 +56,20 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/_authenticated/chats': typeof AuthenticatedChatsRoute
   '/_authenticated/nearby': typeof AuthenticatedNearbyRoute
   '/_authenticated/requests': typeof AuthenticatedRequestsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/nearby' | '/requests'
+  fullPaths: '/' | '/chats' | '/nearby' | '/requests'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/nearby' | '/requests'
+  to: '/' | '/chats' | '/nearby' | '/requests'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/_authenticated/chats'
     | '/_authenticated/nearby'
     | '/_authenticated/requests'
   fileRoutesById: FileRoutesById
@@ -85,6 +95,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/chats': {
+      id: '/_authenticated/chats'
+      path: '/chats'
+      fullPath: '/chats'
+      preLoaderRoute: typeof AuthenticatedChatsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/nearby': {
       id: '/_authenticated/nearby'
       path: '/nearby'
@@ -103,11 +120,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedChatsRoute: typeof AuthenticatedChatsRoute
   AuthenticatedNearbyRoute: typeof AuthenticatedNearbyRoute
   AuthenticatedRequestsRoute: typeof AuthenticatedRequestsRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedChatsRoute: AuthenticatedChatsRoute,
   AuthenticatedNearbyRoute: AuthenticatedNearbyRoute,
   AuthenticatedRequestsRoute: AuthenticatedRequestsRoute,
 }
