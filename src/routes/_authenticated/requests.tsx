@@ -88,17 +88,26 @@ function RequestsPage() {
       _accept: accept,
     });
     setBusy(null);
-    if (error) return toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     await load();
-    if (accept && data) navigate({ to: "/chats/$id", params: { id: data as string } });
-    else toast.success("Request declined");
+    if (accept && data) {
+      navigate({ to: "/chats/$id", params: { id: data as string } });
+    } else {
+      toast.success("Request declined");
+    }
   };
 
   const block = async (req: Req) => {
     setBusy(req.id);
     const { error } = await supabase.rpc("block_user", { _target: req.sender_id });
     setBusy(null);
-    if (error) return toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("User blocked");
     load();
   };
@@ -107,7 +116,11 @@ function RequestsPage() {
     setBusy(req.id);
     const { error } = await supabase.rpc("cancel_chat_request", { _request: req.id });
     setBusy(null);
-    if (error) return toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Request cancelled");
     load();
   };
 
