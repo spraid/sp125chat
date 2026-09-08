@@ -173,15 +173,7 @@ function Lobby({ me }: { me: { id: string; name: string } }) {
 
             {!ready ? (
               <p className="py-16 text-center text-muted-foreground">Connecting…</p>
-            ) : peers.length === 0 ? (
-              <Card className="mt-6 flex flex-col items-center gap-3 p-12 text-center">
-                <Users className="size-8 text-muted-foreground" />
-                <p className="font-medium">Nobody else is here yet</p>
-                <p className="max-w-sm text-sm text-muted-foreground">
-                  Share the link — as soon as someone opens it, they show up here.
-                </p>
-              </Card>
-            ) : (
+            ) : peers.length === 0 ? null : (
               <ul className="mt-6 grid gap-3 sm:grid-cols-2">
                 {peers.map((p) => (
                   <li key={p.id}>
