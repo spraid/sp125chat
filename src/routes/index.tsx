@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Radar, Send, Users, ArrowLeft } from "lucide-react";
+import { Radar, Send, ArrowLeft } from "lucide-react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -32,18 +32,55 @@ export const Route = createFileRoute("/")({
 type Peer = { id: string; name: string };
 type Msg = { id: string; from: string; to: string; text: string; at: number };
 
-const ADJ = ["Swift", "Calm", "Bright", "Bold", "Cosmic", "Quiet", "Lucky", "Sunny", "Wild", "Neon"];
-const NOUN = ["Falcon", "Otter", "Comet", "Maple", "Tiger", "Panda", "Nova", "Heron", "Fox", "Koi"];
-
-function randomName() {
-  return `${ADJ[Math.floor(Math.random() * ADJ.length)]} ${NOUN[Math.floor(Math.random() * NOUN.length)]}`;
-}
 
 function LobbyPage() {
-  const [me] = useState(() => ({
-    id: Math.random().toString(36).slice(2) + Date.now().toString(36),
-    name: randomName(),
-  }));
+  const [nameInput, setNameInput] = useState("");
+  const [me, setMe] = useState<{ id: string; name: string } | null>(null);
+
+  if (!me) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-sm p-6">
+          <span className="grid size-10 place-items-center rounded-lg bg-primary text-primary-foreground">
+            <Radar className="size-5" />
+          </span>
+          <h1 className="mt-4 font-display text-xl font-semibold tracking-tight">What should we call you?</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Your name is shown to people nearby. It's required to start chatting.
+          </p>
+          <form
+            className="mt-5 space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const n = nameInput.trim();
+              if (!n) return;
+              setMe({
+                id: Math.random().toString(36).slice(2) + Date.now().toString(36),
+                name: n.slice(0, 40),
+              });
+            }}
+          >
+            <Input
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              placeholder="Your name"
+              maxLength={40}
+              required
+              autoFocus
+            />
+            <Button type="submit" className="w-full" disabled={!nameInput.trim()}>
+              Continue
+            </Button>
+          </form>
+        </Card>
+      </div>
+    );
+  }
+
+  return <Lobby me={me} />;
+}
+
+function Lobby({ me }: { me: { id: string; name: string } }) {
   const [peers, setPeers] = useState<Peer[]>([]);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [active, setActive] = useState<Peer | null>(null);
@@ -136,15 +173,7 @@ function LobbyPage() {
 
             {!ready ? (
               <p className="py-16 text-center text-muted-foreground">Connecting…</p>
-            ) : peers.length === 0 ? (
-              <Card className="mt-6 flex flex-col items-center gap-3 p-12 text-center">
-                <Users className="size-8 text-muted-foreground" />
-                <p className="font-medium">Nobody else is here yet</p>
-                <p className="max-w-sm text-sm text-muted-foreground">
-                  Share the link — as soon as someone opens it, they show up here.
-                </p>
-              </Card>
-            ) : (
+            ) : peers.length === 0 ? null : (
               <ul className="mt-6 grid gap-3 sm:grid-cols-2">
                 {peers.map((p) => (
                   <li key={p.id}>
