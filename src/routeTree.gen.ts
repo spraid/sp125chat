@@ -10,32 +10,12 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
-import { Route as AuthRouteImport } from './routes/auth'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as TermsRouteImport } from './routes/terms'
-import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
-import { Route as AuthenticatedBlockedRouteImport } from './routes/_authenticated/blocked'
-import { Route as AuthenticatedChatsRouteImport } from './routes/_authenticated/chats'
-import { Route as AuthenticatedNearbyRouteImport } from './routes/_authenticated/nearby'
-import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
-import { Route as AuthenticatedReportRouteImport } from './routes/_authenticated/report'
-import { Route as AuthenticatedRequestsRouteImport } from './routes/_authenticated/requests'
-import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
-import { Route as AuthenticatedChatsIdRouteImport } from './routes/_authenticated/chats/$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -48,152 +28,33 @@ const TermsRoute = TermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedBlockedRoute = AuthenticatedBlockedRouteImport.update({
-  id: '/blocked',
-  path: '/blocked',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedChatsRoute = AuthenticatedChatsRouteImport.update({
-  id: '/chats',
-  path: '/chats',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedNearbyRoute = AuthenticatedNearbyRouteImport.update({
-  id: '/nearby',
-  path: '/nearby',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
-  id: '/profile',
-  path: '/profile',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedReportRoute = AuthenticatedReportRouteImport.update({
-  id: '/report',
-  path: '/report',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedRequestsRoute = AuthenticatedRequestsRouteImport.update({
-  id: '/requests',
-  path: '/requests',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedChatsIdRoute = AuthenticatedChatsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AuthenticatedChatsRoute,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/auth': typeof AuthRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
-  '/admin': typeof AuthenticatedAdminRoute
-  '/blocked': typeof AuthenticatedBlockedRoute
-  '/chats': typeof AuthenticatedChatsRouteWithChildren
-  '/nearby': typeof AuthenticatedNearbyRoute
-  '/profile': typeof AuthenticatedProfileRoute
-  '/report': typeof AuthenticatedReportRoute
-  '/requests': typeof AuthenticatedRequestsRoute
-  '/settings': typeof AuthenticatedSettingsRoute
-  '/chats/$id': typeof AuthenticatedChatsIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/auth': typeof AuthRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
-  '/admin': typeof AuthenticatedAdminRoute
-  '/blocked': typeof AuthenticatedBlockedRoute
-  '/chats': typeof AuthenticatedChatsRouteWithChildren
-  '/nearby': typeof AuthenticatedNearbyRoute
-  '/profile': typeof AuthenticatedProfileRoute
-  '/report': typeof AuthenticatedReportRoute
-  '/requests': typeof AuthenticatedRequestsRoute
-  '/settings': typeof AuthenticatedSettingsRoute
-  '/chats/$id': typeof AuthenticatedChatsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
-  '/auth': typeof AuthRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
-  '/_authenticated/admin': typeof AuthenticatedAdminRoute
-  '/_authenticated/blocked': typeof AuthenticatedBlockedRoute
-  '/_authenticated/chats': typeof AuthenticatedChatsRouteWithChildren
-  '/_authenticated/nearby': typeof AuthenticatedNearbyRoute
-  '/_authenticated/profile': typeof AuthenticatedProfileRoute
-  '/_authenticated/report': typeof AuthenticatedReportRoute
-  '/_authenticated/requests': typeof AuthenticatedRequestsRoute
-  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
-  '/_authenticated/chats/$id': typeof AuthenticatedChatsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/auth'
-    | '/privacy'
-    | '/terms'
-    | '/admin'
-    | '/blocked'
-    | '/chats'
-    | '/nearby'
-    | '/profile'
-    | '/report'
-    | '/requests'
-    | '/settings'
-    | '/chats/$id'
+  fullPaths: '/' | '/privacy' | '/terms'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/auth'
-    | '/privacy'
-    | '/terms'
-    | '/admin'
-    | '/blocked'
-    | '/chats'
-    | '/nearby'
-    | '/profile'
-    | '/report'
-    | '/requests'
-    | '/settings'
-    | '/chats/$id'
-  id:
-    | '__root__'
-    | '/'
-    | '/_authenticated'
-    | '/auth'
-    | '/privacy'
-    | '/terms'
-    | '/_authenticated/admin'
-    | '/_authenticated/blocked'
-    | '/_authenticated/chats'
-    | '/_authenticated/nearby'
-    | '/_authenticated/profile'
-    | '/_authenticated/report'
-    | '/_authenticated/requests'
-    | '/_authenticated/settings'
-    | '/_authenticated/chats/$id'
+  to: '/' | '/privacy' | '/terms'
+  id: '__root__' | '/' | '/privacy' | '/terms'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
-  AuthRoute: typeof AuthRoute
   PrivacyRoute: typeof PrivacyRoute
   TermsRoute: typeof TermsRoute
 }
@@ -205,20 +66,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated': {
-      id: '/_authenticated'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -235,112 +82,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/admin': {
-      id: '/_authenticated/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AuthenticatedAdminRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/blocked': {
-      id: '/_authenticated/blocked'
-      path: '/blocked'
-      fullPath: '/blocked'
-      preLoaderRoute: typeof AuthenticatedBlockedRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/chats': {
-      id: '/_authenticated/chats'
-      path: '/chats'
-      fullPath: '/chats'
-      preLoaderRoute: typeof AuthenticatedChatsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/nearby': {
-      id: '/_authenticated/nearby'
-      path: '/nearby'
-      fullPath: '/nearby'
-      preLoaderRoute: typeof AuthenticatedNearbyRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/profile': {
-      id: '/_authenticated/profile'
-      path: '/profile'
-      fullPath: '/profile'
-      preLoaderRoute: typeof AuthenticatedProfileRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/report': {
-      id: '/_authenticated/report'
-      path: '/report'
-      fullPath: '/report'
-      preLoaderRoute: typeof AuthenticatedReportRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/requests': {
-      id: '/_authenticated/requests'
-      path: '/requests'
-      fullPath: '/requests'
-      preLoaderRoute: typeof AuthenticatedRequestsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/settings': {
-      id: '/_authenticated/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/chats/$id': {
-      id: '/_authenticated/chats/$id'
-      path: '/$id'
-      fullPath: '/chats/$id'
-      preLoaderRoute: typeof AuthenticatedChatsIdRouteImport
-      parentRoute: typeof AuthenticatedChatsRoute
-    }
   }
 }
 
-interface AuthenticatedChatsRouteChildren {
-  AuthenticatedChatsIdRoute: typeof AuthenticatedChatsIdRoute
-}
-
-const AuthenticatedChatsRouteChildren: AuthenticatedChatsRouteChildren = {
-  AuthenticatedChatsIdRoute: AuthenticatedChatsIdRoute,
-}
-
-const AuthenticatedChatsRouteWithChildren =
-  AuthenticatedChatsRoute._addFileChildren(AuthenticatedChatsRouteChildren)
-
-interface AuthenticatedRouteRouteChildren {
-  AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
-  AuthenticatedBlockedRoute: typeof AuthenticatedBlockedRoute
-  AuthenticatedChatsRoute: typeof AuthenticatedChatsRouteWithChildren
-  AuthenticatedNearbyRoute: typeof AuthenticatedNearbyRoute
-  AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
-  AuthenticatedReportRoute: typeof AuthenticatedReportRoute
-  AuthenticatedRequestsRoute: typeof AuthenticatedRequestsRoute
-  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
-}
-
-const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedAdminRoute: AuthenticatedAdminRoute,
-  AuthenticatedBlockedRoute: AuthenticatedBlockedRoute,
-  AuthenticatedChatsRoute: AuthenticatedChatsRouteWithChildren,
-  AuthenticatedNearbyRoute: AuthenticatedNearbyRoute,
-  AuthenticatedProfileRoute: AuthenticatedProfileRoute,
-  AuthenticatedReportRoute: AuthenticatedReportRoute,
-  AuthenticatedRequestsRoute: AuthenticatedRequestsRoute,
-  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
-}
-
-const AuthenticatedRouteRouteWithChildren =
-  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
-  AuthRoute: AuthRoute,
   PrivacyRoute: PrivacyRoute,
   TermsRoute: TermsRoute,
 }

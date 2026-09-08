@@ -1,103 +1,232 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { Radar, MessageCircle, MapPin, Shield } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Radar, Send, Users, ArrowLeft } from "lucide-react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { initials, clockTime } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Nearby Chat — meet people within 1 km" },
-      { name: "description", content: "Discover and chat with people nearby in real time. Private, secure, and location-based." },
-      { property: "og:title", content: "Nearby Chat — meet people within 1 km" },
-      { property: "og:description", content: "Discover and chat with people nearby in real time. Private, secure, and location-based." },
+      { title: "Nearby Chat — talk to everyone on this site" },
+      {
+        name: "description",
+        content: "See everyone who has this site open right now and message them instantly. No sign-up needed.",
+      },
+      { property: "og:title", content: "Nearby Chat — talk to everyone on this site" },
+      {
+        property: "og:description",
+        content: "See everyone who has this site open right now and message them instantly. No sign-up needed.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: LandingPage,
+  component: LobbyPage,
 });
 
-function LandingPage() {
+type Peer = { id: string; name: string };
+type Msg = { id: string; from: string; to: string; text: string; at: number };
+
+const ADJ = ["Swift", "Calm", "Bright", "Bold", "Cosmic", "Quiet", "Lucky", "Sunny", "Wild", "Neon"];
+const NOUN = ["Falcon", "Otter", "Comet", "Maple", "Tiger", "Panda", "Nova", "Heron", "Fox", "Koi"];
+
+function randomName() {
+  return `${ADJ[Math.floor(Math.random() * ADJ.length)]} ${NOUN[Math.floor(Math.random() * NOUN.length)]}`;
+}
+
+function LobbyPage() {
+  const [me] = useState(() => ({
+    id: Math.random().toString(36).slice(2) + Date.now().toString(36),
+    name: randomName(),
+  }));
+  const [peers, setPeers] = useState<Peer[]>([]);
+  const [messages, setMessages] = useState<Msg[]>([]);
+  const [active, setActive] = useState<Peer | null>(null);
+  const [text, setText] = useState("");
+  const [ready, setReady] = useState(false);
+  const chanRef = useRef<RealtimeChannel | null>(null);
+  const endRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const channel = supabase.channel("public-lobby", {
+      config: { presence: { key: me.id }, broadcast: { self: false } },
+    });
+    chanRef.current = channel;
+
+    channel
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState<{ id: string; name: string }>();
+        const list: Peer[] = [];
+        for (const key of Object.keys(state)) {
+          const entry = state[key]?.[0];
+          if (entry && entry.id !== me.id) list.push({ id: entry.id, name: entry.name });
+        }
+        setPeers(list.sort((a, b) => a.name.localeCompare(b.name)));
+      })
+      .on("broadcast", { event: "dm" }, ({ payload }) => {
+        const m = payload as Msg;
+        if (m.to !== me.id) return;
+        setMessages((prev) => [...prev, m]);
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({ id: me.id, name: me.name });
+          setReady(true);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [me]);
+
+  const thread = useMemo(
+    () => (active ? messages.filter((m) => m.from === active.id || m.to === active.id) : []),
+    [messages, active],
+  );
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [thread.length, active]);
+
+  const send = (e: React.FormEvent) => {
+    e.preventDefault();
+    const body = text.trim();
+    if (!body || !active || !chanRef.current) return;
+    const msg: Msg = {
+      id: Math.random().toString(36).slice(2),
+      from: me.id,
+      to: active.id,
+      text: body.slice(0, 2000),
+      at: Date.now(),
+    };
+    chanRef.current.send({ type: "broadcast", event: "dm", payload: { ...msg, name: me.name } });
+    setMessages((prev) => [...prev, msg]);
+    setText("");
+  };
+
+  const unread = (id: string) => messages.filter((m) => m.from === id).length;
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/85 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-3">
-          <Link to="/" className="flex items-center gap-2">
-            <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
-              <Radar className="size-4" />
-            </span>
-            <span className="font-display text-lg font-semibold tracking-tight">Nearby Chat</span>
-          </Link>
-          <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" asChild>
-              <Link to="/auth">Sign in</Link>
-            </Button>
-            <Button asChild>
-              <Link to="/auth">Get started</Link>
-            </Button>
-          </div>
+      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/85 px-4 py-3 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-4xl items-center gap-2">
+          <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
+            <Radar className="size-4" />
+          </span>
+          <span className="font-display text-lg font-semibold tracking-tight">Nearby Chat</span>
+          <span className="ml-auto text-sm text-muted-foreground">
+            You are <strong className="text-foreground">{me.name}</strong>
+          </span>
         </div>
       </header>
 
-      <main className="flex-1">
-        <section className="mx-auto max-w-5xl px-4 py-20 text-center">
-          <h1 className="font-display text-4xl font-bold tracking-tight sm:text-6xl">
-            Meet people within <span className="text-primary">1 km</span>
-          </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
-            A real-time, privacy-first chat app that connects you with nearby people. Your exact
-            location is never shared.
-          </p>
-          <div className="mt-8 flex justify-center gap-3">
-            <Button size="lg" asChild>
-              <Link to="/auth">Start chatting</Link>
-            </Button>
-            <Button size="lg" variant="outline" asChild>
-              <Link to="/privacy">Privacy</Link>
-            </Button>
-          </div>
-        </section>
+      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6">
+        {!active ? (
+          <>
+            <h1 className="font-display text-2xl font-semibold tracking-tight">People here right now</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Everyone with this site open appears below. Tap someone to start chatting.
+            </p>
 
-        <section className="mx-auto max-w-5xl px-4 py-12">
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Feature
-              icon={MapPin}
-              title="Nearby only"
-              desc="Discover people who are actually close to you, filtered by a 1 km radius."
-            />
-            <Feature
-              icon={MessageCircle}
-              title="Realtime chat"
-              desc="Send and receive messages instantly with secure, private conversations."
-            />
-            <Feature
-              icon={Shield}
-              title="Privacy first"
-              desc="Your exact coordinates stay hidden. Only approximate distance is shown."
-            />
+            {!ready ? (
+              <p className="py-16 text-center text-muted-foreground">Connecting…</p>
+            ) : peers.length === 0 ? (
+              <Card className="mt-6 flex flex-col items-center gap-3 p-12 text-center">
+                <Users className="size-8 text-muted-foreground" />
+                <p className="font-medium">Nobody else is here yet</p>
+                <p className="max-w-sm text-sm text-muted-foreground">
+                  Share the link — as soon as someone opens it, they show up here.
+                </p>
+              </Card>
+            ) : (
+              <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+                {peers.map((p) => (
+                  <li key={p.id}>
+                    <Card
+                      className="flex cursor-pointer items-center gap-3 p-4 transition hover:bg-muted/50"
+                      onClick={() => setActive(p)}
+                    >
+                      <div className="relative">
+                        <Avatar className="size-11">
+                          <AvatarFallback>{initials(p.name)}</AvatarFallback>
+                        </Avatar>
+                        <span className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-card bg-emerald-500" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">{p.name}</p>
+                        <p className="text-xs text-muted-foreground">online now</p>
+                      </div>
+                      {unread(p.id) > 0 && (
+                        <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+                          {unread(p.id)}
+                        </span>
+                      )}
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : (
+          <div className="flex h-[calc(100vh-9rem)] flex-col">
+            <div className="mb-3 flex items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setActive(null)}>
+                <ArrowLeft className="mr-2 size-4" /> Back
+              </Button>
+              <Avatar className="size-8">
+                <AvatarFallback>{initials(active.name)}</AvatarFallback>
+              </Avatar>
+              <p className="font-medium">{active.name}</p>
+            </div>
+
+            <Card className="flex-1 overflow-y-auto p-4">
+              {thread.length === 0 ? (
+                <p className="py-12 text-center text-sm text-muted-foreground">
+                  Say hello — messages are live and disappear when you close the page.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {thread.map((m) => (
+                    <li key={m.id} className={m.from === me.id ? "text-right" : "text-left"}>
+                      <span
+                        className={`inline-block max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+                          m.from === me.id
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-foreground"
+                        }`}
+                      >
+                        {m.text}
+                      </span>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {clockTime(new Date(m.at).toISOString())}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div ref={endRef} />
+            </Card>
+
+            <form onSubmit={send} className="mt-3 flex gap-2">
+              <Input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder={`Message ${active.name}…`}
+                maxLength={2000}
+              />
+              <Button type="submit" disabled={!text.trim()}>
+                <Send className="size-4" />
+              </Button>
+            </form>
           </div>
-        </section>
+        )}
       </main>
-
-      <footer className="border-t border-border/60 py-8 text-center text-sm text-muted-foreground">
-        <Link to="/privacy" className="hover:underline">
-          Privacy
-        </Link>{" "}
-        ·{" "}
-        <Link to="/terms" className="hover:underline">
-          Terms
-        </Link>
-      </footer>
     </div>
-  );
-}
-
-function Feature({ icon: Icon, title, desc }: { icon: typeof MapPin; title: string; desc: string }) {
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <Icon className="mb-3 size-6 text-primary" />
-        <h3 className="font-display text-lg font-semibold">{title}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">{desc}</p>
-      </CardContent>
-    </Card>
   );
 }
