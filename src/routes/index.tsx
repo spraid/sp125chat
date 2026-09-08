@@ -40,10 +40,53 @@ function randomName() {
 }
 
 function LobbyPage() {
-  const [me] = useState(() => ({
-    id: Math.random().toString(36).slice(2) + Date.now().toString(36),
-    name: randomName(),
-  }));
+  const [nameInput, setNameInput] = useState("");
+  const [me, setMe] = useState<{ id: string; name: string } | null>(null);
+
+  if (!me) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-sm p-6">
+          <span className="grid size-10 place-items-center rounded-lg bg-primary text-primary-foreground">
+            <Radar className="size-5" />
+          </span>
+          <h1 className="mt-4 font-display text-xl font-semibold tracking-tight">What should we call you?</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Your name is shown to people nearby. It's required to start chatting.
+          </p>
+          <form
+            className="mt-5 space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const n = nameInput.trim();
+              if (!n) return;
+              setMe({
+                id: Math.random().toString(36).slice(2) + Date.now().toString(36),
+                name: n.slice(0, 40),
+              });
+            }}
+          >
+            <Input
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              placeholder="Your name"
+              maxLength={40}
+              required
+              autoFocus
+            />
+            <Button type="submit" className="w-full" disabled={!nameInput.trim()}>
+              Continue
+            </Button>
+          </form>
+        </Card>
+      </div>
+    );
+  }
+
+  return <Lobby me={me} />;
+}
+
+function Lobby({ me }: { me: { id: string; name: string } }) {
   const [peers, setPeers] = useState<Peer[]>([]);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [active, setActive] = useState<Peer | null>(null);
