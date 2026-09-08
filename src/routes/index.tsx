@@ -32,12 +32,6 @@ export const Route = createFileRoute("/")({
 type Peer = { id: string; name: string };
 type Msg = { id: string; from: string; to: string; text: string; at: number };
 
-const ADJ = ["Swift", "Calm", "Bright", "Bold", "Cosmic", "Quiet", "Lucky", "Sunny", "Wild", "Neon"];
-const NOUN = ["Falcon", "Otter", "Comet", "Maple", "Tiger", "Panda", "Nova", "Heron", "Fox", "Koi"];
-
-function randomName() {
-  return `${ADJ[Math.floor(Math.random() * ADJ.length)]} ${NOUN[Math.floor(Math.random() * NOUN.length)]}`;
-}
 
 function LobbyPage() {
   const [nameInput, setNameInput] = useState("");
