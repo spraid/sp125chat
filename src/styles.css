@@ -36,25 +36,25 @@
 
 :root {
   --radius: 0.875rem;
-  --background: oklch(0.97 0.01 95);
-  --foreground: oklch(0.22 0.04 265);
+  --background: oklch(0.97 0.015 250);
+  --foreground: oklch(0.22 0.07 260);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.04 265);
+  --card-foreground: oklch(0.22 0.07 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.04 265);
-  --primary: oklch(0.52 0.14 195);
+  --popover-foreground: oklch(0.22 0.07 260);
+  --primary: oklch(0.48 0.19 258);
   --primary-foreground: oklch(0.98 0.01 0);
-  --secondary: oklch(0.94 0.02 95);
-  --secondary-foreground: oklch(0.22 0.04 265);
-  --muted: oklch(0.92 0.02 95);
-  --muted-foreground: oklch(0.52 0.04 250);
-  --accent: oklch(0.78 0.14 80);
-  --accent-foreground: oklch(0.22 0.04 265);
+  --secondary: oklch(0.94 0.03 250);
+  --secondary-foreground: oklch(0.22 0.07 260);
+  --muted: oklch(0.93 0.02 250);
+  --muted-foreground: oklch(0.52 0.05 258);
+  --accent: oklch(0.79 0.15 82);
+  --accent-foreground: oklch(0.22 0.07 260);
   --destructive: oklch(0.58 0.22 25);
   --destructive-foreground: oklch(0.98 0.01 0);
-  --border: oklch(0.88 0.02 95);
-  --input: oklch(0.88 0.02 95);
-  --ring: oklch(0.52 0.14 195);
+  --border: oklch(0.88 0.03 250);
+  --input: oklch(0.88 0.03 250);
+  --ring: oklch(0.48 0.19 258);
 }
 
 .dark {
@@ -88,7 +88,9 @@
     color: var(--color-foreground);
     font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   }
-  h1, h2, h3, h4, h5, h6 {
-    font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  h1, h2, h3, h4, h5, h6, .font-display {
+    font-family: "Anton", ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
   }
 }
