@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, ArrowLeft, ImagePlus, MapPin, Smile, Mail, Phone, LogOut } from "lucide-react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Send, ArrowLeft, ImagePlus, MapPin, Smile, Mail, Phone, LogOut, Check, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,17 +12,17 @@ import catAsset from "@/assets/cat.jpg.asset.json";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Cat Chat — talk to everyone on this site" },
+      { title: "Cat Chat — chat with people within 1 km" },
       {
         name: "description",
         content:
-          "See everyone who has this site open right now and send them messages, photos, emojis and your location instantly.",
+          "See people using this site within 1 km of you, send a chat request and message them with photos, emojis and your location.",
       },
-      { property: "og:title", content: "Cat Chat — talk to everyone on this site" },
+      { property: "og:title", content: "Cat Chat — chat with people within 1 km" },
       {
         property: "og:description",
         content:
-          "See everyone who has this site open right now and send them messages, photos, emojis and your location instantly.",
+          "See people using this site within 1 km of you, send a chat request and message them with photos, emojis and your location.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -32,14 +31,15 @@ export const Route = createFileRoute("/")({
   component: LobbyPage,
 });
 
-type Peer = { id: string; name: string };
+type Peer = { id: string; name: string; distance_meters: number };
+type Req = { id: string; from_id: string; to_id: string; status: string };
 type Msg = {
   id: string;
-  from: string;
-  to: string;
-  kind: "text" | "image" | "location";
-  text: string;
-  at: number;
+  from_id: string;
+  to_id: string;
+  kind: string;
+  body: string;
+  created_at: string;
 };
 
 const NAME_KEY = "cat-chat-name";
@@ -88,7 +88,7 @@ function LobbyPage() {
           <div className="p-6">
             <h1 className="font-display text-2xl tracking-tight">What should we call you?</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Your name is shown to everyone here. We remember it on this device.
+              Your name is shown to people near you. We remember it on this device.
             </p>
             <form
               className="mt-5 space-y-3"
@@ -142,51 +142,98 @@ async function compressImage(file: File): Promise<string> {
 
 function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut: () => void }) {
   const [peers, setPeers] = useState<Peer[]>([]);
+  const [reqs, setReqs] = useState<Req[]>([]);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [active, setActive] = useState<Peer | null>(null);
   const [text, setText] = useState("");
+  const [locError, setLocError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const chanRef = useRef<RealtimeChannel | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    const channel = supabase.channel("public-lobby", {
-      config: { presence: { key: me.id }, broadcast: { self: false } },
-    });
-    chanRef.current = channel;
+  const loadReqs = useCallback(async () => {
+    const { data } = await supabase
+      .from("chat_reqs")
+      .select("id, from_id, to_id, status")
+      .or(`from_id.eq.${me.id},to_id.eq.${me.id}`);
+    if (data) setReqs(data as Req[]);
+  }, [me.id]);
 
-    channel
-      .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState<{ id: string; name: string }>();
-        const list: Peer[] = [];
-        for (const key of Object.keys(state)) {
-          const entry = state[key]?.[0];
-          if (entry && entry.id !== me.id) list.push({ id: entry.id, name: entry.name });
-        }
-        setPeers(list.sort((a, b) => a.name.localeCompare(b.name)));
-      })
-      .on("broadcast", { event: "dm" }, ({ payload }) => {
-        const m = payload as Msg;
-        if (m.to !== me.id) return;
-        setMessages((prev) => [...prev, m]);
-      })
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await channel.track({ id: me.id, name: me.name });
-          setReady(true);
-        }
-      });
+  const loadPeers = useCallback(async () => {
+    const { data } = await supabase.rpc("guests_nearby", { _id: me.id });
+    if (data) setPeers(data as Peer[]);
+  }, [me.id]);
+
+  // Location + presence heartbeat
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocError("This device cannot share its location, so nobody nearby can be found.");
+      return;
+    }
+    let lat: number | null = null;
+    let lng: number | null = null;
+
+    const watch = navigator.geolocation.watchPosition(
+      (pos) => {
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+        setLocError(null);
+        void supabase
+          .rpc("guest_ping", { _id: me.id, _name: me.name, _lat: lat, _lng: lng })
+          .then(() => {
+            setReady(true);
+            void loadPeers();
+          });
+      },
+      () => setLocError("Please allow location access so we can show people within 1 km of you."),
+      { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 },
+    );
+
+    const beat = setInterval(() => {
+      if (lat === null || lng === null) return;
+      void supabase.rpc("guest_ping", { _id: me.id, _name: me.name, _lat: lat, _lng: lng });
+      void loadPeers();
+    }, 20000);
 
     return () => {
-      supabase.removeChannel(channel);
+      navigator.geolocation.clearWatch(watch);
+      clearInterval(beat);
     };
-  }, [me]);
+  }, [me, loadPeers]);
+
+  // Messages + requests
+  useEffect(() => {
+    void loadReqs();
+    void supabase
+      .from("msgs")
+      .select("id, from_id, to_id, kind, body, created_at")
+      .or(`from_id.eq.${me.id},to_id.eq.${me.id}`)
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        if (data) setMessages(data as Msg[]);
+      });
+
+    const channel = supabase
+      .channel("cat-chat-live")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "msgs" }, ({ new: row }) => {
+        const m = row as Msg;
+        if (m.from_id !== me.id && m.to_id !== me.id) return;
+        setMessages((prev) => (prev.some((p) => p.id === m.id) ? prev : [...prev, m]));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_reqs" }, () => {
+        void loadReqs();
+      })
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [me.id, loadReqs]);
 
   const thread = useMemo(
-    () => (active ? messages.filter((m) => m.from === active.id || m.to === active.id) : []),
+    () => (active ? messages.filter((m) => m.from_id === active.id || m.to_id === active.id) : []),
     [messages, active],
   );
 
@@ -194,25 +241,36 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [thread.length, active]);
 
-  const push = (kind: Msg["kind"], body: string) => {
-    if (!active || !chanRef.current) return;
-    const msg: Msg = {
-      id: Math.random().toString(36).slice(2),
-      from: me.id,
-      to: active.id,
-      kind,
-      text: body,
-      at: Date.now(),
-    };
-    chanRef.current.send({ type: "broadcast", event: "dm", payload: msg });
-    setMessages((prev) => [...prev, msg]);
+  const reqWith = useCallback(
+    (peerId: string) => reqs.find((r) => (r.from_id === me.id && r.to_id === peerId) || (r.from_id === peerId && r.to_id === me.id)),
+    [reqs, me.id],
+  );
+
+  const sendRequest = async (peerId: string) => {
+    const { error } = await supabase.from("chat_reqs").insert({ from_id: me.id, to_id: peerId, status: "pending" });
+    if (error) {
+      setBusy("Could not send the request");
+      setTimeout(() => setBusy(null), 2500);
+      return;
+    }
+    void loadReqs();
+  };
+
+  const respond = async (id: string, status: "accepted" | "rejected") => {
+    await supabase.from("chat_reqs").update({ status }).eq("id", id);
+    void loadReqs();
+  };
+
+  const push = async (kind: Msg["kind"], body: string) => {
+    if (!active) return;
+    await supabase.from("msgs").insert({ from_id: me.id, to_id: active.id, kind, body });
   };
 
   const send = (e: React.FormEvent) => {
     e.preventDefault();
     const body = text.trim();
     if (!body) return;
-    push("text", body.slice(0, 2000));
+    void push("text", body.slice(0, 2000));
     setText("");
     setShowEmoji(false);
   };
@@ -221,7 +279,7 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
     setBusy("Sending photo…");
     try {
       const dataUrl = await compressImage(file);
-      push("image", dataUrl);
+      await push("image", dataUrl);
     } catch {
       setBusy("Could not send that photo");
       setTimeout(() => setBusy(null), 2500);
@@ -240,7 +298,7 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const { latitude, longitude } = pos.coords;
-        push("location", `https://www.google.com/maps?q=${latitude.toFixed(5)},${longitude.toFixed(5)}`);
+        void push("location", `https://www.google.com/maps?q=${latitude.toFixed(5)},${longitude.toFixed(5)}`);
         setBusy(null);
       },
       () => {
@@ -251,7 +309,8 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
     );
   };
 
-  const unread = (id: string) => messages.filter((m) => m.from === id).length;
+  const unread = (id: string) => messages.filter((m) => m.from_id === id).length;
+  const distanceLabel = (m: number) => (m < 1000 ? `${m} m away` : "1 km away");
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -271,39 +330,66 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
       <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6">
         {!active ? (
           <>
-            <h1 className="font-display text-3xl tracking-tight">People here right now</h1>
+            <h1 className="font-display text-3xl tracking-tight">People within 1 km</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Everyone with this site open appears below. Tap someone to start chatting.
+              Send a chat request — once they accept, you can message each other.
             </p>
 
-            {!ready ? (
-              <p className="py-16 text-center text-muted-foreground">Connecting…</p>
+            {locError ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">{locError}</p>
+            ) : !ready ? (
+              <p className="py-16 text-center text-muted-foreground">Finding people near you…</p>
             ) : peers.length === 0 ? null : (
               <ul className="mt-6 grid gap-3 sm:grid-cols-2">
-                {peers.map((p) => (
-                  <li key={p.id}>
-                    <Card
-                      className="flex cursor-pointer items-center gap-3 p-4 transition hover:bg-muted/50"
-                      onClick={() => setActive(p)}
-                    >
-                      <div className="relative">
-                        <Avatar className="size-11">
-                          <AvatarFallback>{initials(p.name)}</AvatarFallback>
-                        </Avatar>
-                        <span className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-card bg-emerald-500" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium">{p.name}</p>
-                        <p className="text-xs text-muted-foreground">online now</p>
-                      </div>
-                      {unread(p.id) > 0 && (
-                        <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
-                          {unread(p.id)}
-                        </span>
-                      )}
-                    </Card>
-                  </li>
-                ))}
+                {peers.map((p) => {
+                  const r = reqWith(p.id);
+                  const accepted = r?.status === "accepted";
+                  const incoming = r && r.status === "pending" && r.to_id === me.id;
+                  const outgoing = r && r.status === "pending" && r.from_id === me.id;
+                  return (
+                    <li key={p.id}>
+                      <Card className="flex items-center gap-3 p-4">
+                        <div className="relative">
+                          <Avatar className="size-11">
+                            <AvatarFallback>{initials(p.name)}</AvatarFallback>
+                          </Avatar>
+                          <span className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-card bg-emerald-500" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium">{p.name}</p>
+                          <p className="text-xs text-muted-foreground">{distanceLabel(p.distance_meters)}</p>
+                        </div>
+                        {accepted ? (
+                          <Button size="sm" onClick={() => setActive(p)}>
+                            Chat
+                            {unread(p.id) > 0 && (
+                              <span className="ml-2 rounded-full bg-primary-foreground/20 px-1.5 text-xs">
+                                {unread(p.id)}
+                              </span>
+                            )}
+                          </Button>
+                        ) : incoming ? (
+                          <div className="flex gap-1">
+                            <Button size="icon" variant="secondary" title="Accept" onClick={() => respond(r!.id, "accepted")}>
+                              <Check className="size-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" title="Decline" onClick={() => respond(r!.id, "rejected")}>
+                              <X className="size-4" />
+                            </Button>
+                          </div>
+                        ) : outgoing ? (
+                          <span className="text-xs text-muted-foreground">Request sent</span>
+                        ) : r?.status === "rejected" ? (
+                          <span className="text-xs text-muted-foreground">Declined</span>
+                        ) : (
+                          <Button size="sm" variant="secondary" onClick={() => sendRequest(p.id)}>
+                            Request
+                          </Button>
+                        )}
+                      </Card>
+                    </li>
+                  );
+                })}
               </ul>
             )}
 
@@ -341,25 +427,25 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
             <Card className="flex-1 overflow-y-auto p-4">
               {thread.length === 0 ? (
                 <p className="py-12 text-center text-sm text-muted-foreground">
-                  Say hello — messages are live and disappear when you close the page.
+                  Say hello — your messages are saved and stay here.
                 </p>
               ) : (
                 <ul className="space-y-2">
                   {thread.map((m) => (
-                    <li key={m.id} className={m.from === me.id ? "text-right" : "text-left"}>
+                    <li key={m.id} className={m.from_id === me.id ? "text-right" : "text-left"}>
                       {m.kind === "image" ? (
                         <img
-                          src={m.text}
+                          src={m.body}
                           alt="Shared photo"
                           className="inline-block max-h-64 max-w-[80%] rounded-2xl border border-border object-cover"
                         />
                       ) : m.kind === "location" ? (
                         <a
-                          href={m.text}
+                          href={m.body}
                           target="_blank"
                           rel="noreferrer"
                           className={`inline-flex max-w-[80%] items-center gap-2 rounded-2xl px-3 py-2 text-sm underline ${
-                            m.from === me.id ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+                            m.from_id === me.id ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
                           }`}
                         >
                           <MapPin className="size-4 shrink-0" /> Open my location on the map
@@ -367,15 +453,13 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
                       ) : (
                         <span
                           className={`inline-block max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-                            m.from === me.id ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+                            m.from_id === me.id ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
                           }`}
                         >
-                          {m.text}
+                          {m.body}
                         </span>
                       )}
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        {clockTime(new Date(m.at).toISOString())}
-                      </p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">{clockTime(m.created_at)}</p>
                     </li>
                   ))}
                 </ul>
