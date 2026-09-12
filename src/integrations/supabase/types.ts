@@ -428,6 +428,7 @@ export type Database = {
         Args: { _conv: string; _user: string }
         Returns: boolean
       }
+      purge_old_msgs: { Args: never; Returns: undefined }
       respond_chat_request: {
         Args: { _accept: boolean; _request: string }
         Returns: string
