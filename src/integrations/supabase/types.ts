@@ -35,6 +35,30 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_reqs: {
+        Row: {
+          created_at: string
+          from_id: string
+          id: string
+          status: string
+          to_id: string
+        }
+        Insert: {
+          created_at?: string
+          from_id: string
+          id?: string
+          status?: string
+          to_id: string
+        }
+        Update: {
+          created_at?: string
+          from_id?: string
+          id?: string
+          status?: string
+          to_id?: string
+        }
+        Relationships: []
+      }
       chat_requests: {
         Row: {
           conversation_id: string | null
@@ -120,6 +144,30 @@ export type Database = {
         }
         Relationships: []
       }
+      guests: {
+        Row: {
+          id: string
+          last_seen: string
+          lat: number | null
+          lng: number | null
+          name: string
+        }
+        Insert: {
+          id: string
+          last_seen?: string
+          lat?: number | null
+          lng?: number | null
+          name: string
+        }
+        Update: {
+          id?: string
+          last_seen?: string
+          lat?: number | null
+          lng?: number | null
+          name?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           content: string
@@ -154,6 +202,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      msgs: {
+        Row: {
+          body: string
+          created_at: string
+          from_id: string
+          id: string
+          kind: string
+          to_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          from_id: string
+          id?: string
+          kind?: string
+          to_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          from_id?: string
+          id?: string
+          kind?: string
+          to_id?: string
+        }
+        Relationships: []
       }
       notifications: {
         Row: {
@@ -327,6 +402,18 @@ export type Database = {
           id: string
           last_seen: string
           online: boolean
+        }[]
+      }
+      guest_ping: {
+        Args: { _id: string; _lat: number; _lng: number; _name: string }
+        Returns: undefined
+      }
+      guests_nearby: {
+        Args: { _id: string }
+        Returns: {
+          distance_meters: number
+          id: string
+          name: string
         }[]
       }
       has_role: {
