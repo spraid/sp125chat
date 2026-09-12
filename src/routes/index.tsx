@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Send, ArrowLeft, ImagePlus, MapPin, Smile, Mail, Phone, LogOut, Check, X } from "lucide-react";
+import { Send, ArrowLeft, ImagePlus, MapPin, Smile, Mail, LogOut, Check, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
