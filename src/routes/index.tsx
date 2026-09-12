@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Send, ArrowLeft, ImagePlus, MapPin, Smile, Mail, Phone, LogOut, Check, X } from "lucide-react";
+import { Send, ArrowLeft, ImagePlus, MapPin, Smile, Mail, LogOut, Check, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -399,14 +399,9 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
                 Found a problem or have an idea? Reach out any time.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Button asChild variant="secondary">
+                <Button asChild variant="secondary" size="sm">
                   <a href="mailto:prasanthkumar99963@gmail.com?subject=Cat%20Chat%20feedback">
                     <Mail className="mr-2 size-4" /> prasanthkumar99963@gmail.com
-                  </a>
-                </Button>
-                <Button asChild>
-                  <a href="https://wa.me/916300193552" target="_blank" rel="noreferrer">
-                    <Phone className="mr-2 size-4" /> WhatsApp 6300193552
                   </a>
                 </Button>
               </div>
