@@ -1,28 +1,39 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Send, ArrowLeft, ImagePlus, MapPin, Smile, Mail, LogOut, Check, X } from "lucide-react";
+import {
+  Send,
+  ArrowLeft,
+  ImagePlus,
+  MapPin,
+  Smile,
+  Mail,
+  LogOut,
+  Siren,
+  HeartHandshake,
+  X,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { initials, clockTime } from "@/lib/format";
+import { initials, clockTime, timeAgo } from "@/lib/format";
 import catAsset from "@/assets/cat.jpg.asset.json";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Cat Chat — chat with people within 1 km" },
+      { title: "Cat Chat — chat and get help within 1 km" },
       {
         name: "description",
         content:
-          "See people using this site within 1 km of you, send a chat request and message them with photos, emojis and your location.",
+          "See people using this site within 1 km of you, message them with photos, emojis and your location, and raise an emergency help request nearby.",
       },
-      { property: "og:title", content: "Cat Chat — chat with people within 1 km" },
+      { property: "og:title", content: "Cat Chat — chat and get help within 1 km" },
       {
         property: "og:description",
         content:
-          "See people using this site within 1 km of you, send a chat request and message them with photos, emojis and your location.",
+          "See people using this site within 1 km of you, message them with photos, emojis and your location, and raise an emergency help request nearby.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -32,7 +43,6 @@ export const Route = createFileRoute("/")({
 });
 
 type Peer = { id: string; name: string; distance_meters: number };
-type Req = { id: string; from_id: string; to_id: string; status: string };
 type Msg = {
   id: string;
   from_id: string;
@@ -41,12 +51,36 @@ type Msg = {
   body: string;
   created_at: string;
 };
+type Emergency = {
+  id: string;
+  name: string;
+  kind: string;
+  blood_group: string | null;
+  hospital: string | null;
+  urgency: string | null;
+  distance_meters: number;
+  created_at: string;
+  helper_count: number;
+  mine: boolean;
+  i_helped: boolean;
+};
 
 const NAME_KEY = "cat-chat-name";
 const ID_KEY = "cat-chat-id";
+const PEERS_KEY = "cat-chat-peer-names";
 const EMOJIS = "😀 😂 🥰 😍 😎 🤩 😉 🙃 🤔 😴 😭 😡 👍 👎 🙏 👏 🔥 💯 ✨ 🎉 ❤️ 💙 💛 🐱 🐾 🍕 ☕ 🌸 🌙 ⚽".split(
   " ",
 );
+
+const EMERGENCY_KINDS = [
+  { key: "accident", label: "🚨 Accident Emergency" },
+  { key: "ambulance", label: "🚑 Ambulance Required" },
+  { key: "blood", label: "🩸 Blood Required" },
+  { key: "medical", label: "👨‍⚕️ Medical Help" },
+  { key: "vehicle", label: "🚗 Vehicle Required" },
+  { key: "general", label: "🆘 General Emergency" },
+];
+const kindLabel = (k: string) => EMERGENCY_KINDS.find((e) => e.key === k)?.label ?? "🆘 Emergency";
 
 function LobbyPage() {
   const [nameInput, setNameInput] = useState("");
@@ -140,30 +174,57 @@ async function compressImage(file: File): Promise<string> {
   return canvas.toDataURL("image/jpeg", 0.55);
 }
 
+function readPeerNames(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(PEERS_KEY) ?? "{}") as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
 function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut: () => void }) {
   const [peers, setPeers] = useState<Peer[]>([]);
-  const [reqs, setReqs] = useState<Req[]>([]);
   const [messages, setMessages] = useState<Msg[]>([]);
-  const [active, setActive] = useState<Peer | null>(null);
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [active, setActive] = useState<{ id: string; name: string } | null>(null);
   const [text, setText] = useState("");
   const [locError, setLocError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [emergencies, setEmergencies] = useState<Emergency[]>([]);
+  const [showEmergency, setShowEmergency] = useState(false);
+  const [bloodForm, setBloodForm] = useState<{ group: string; hospital: string; urgency: string } | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
 
-  const loadReqs = useCallback(async () => {
-    const { data } = await supabase
-      .from("chat_reqs")
-      .select("id, from_id, to_id, status")
-      .or(`from_id.eq.${me.id},to_id.eq.${me.id}`);
-    if (data) setReqs(data as Req[]);
-  }, [me.id]);
+  useEffect(() => setNames(readPeerNames()), []);
+
+  const rememberNames = useCallback((list: Peer[]) => {
+    if (list.length === 0) return;
+    setNames((prev) => {
+      const next = { ...prev };
+      for (const p of list) next[p.id] = p.name;
+      try {
+        localStorage.setItem(PEERS_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
 
   const loadPeers = useCallback(async () => {
     const { data } = await supabase.rpc("guests_nearby", { _id: me.id });
-    if (data) setPeers(data as Peer[]);
+    if (data) {
+      setPeers(data as Peer[]);
+      rememberNames(data as Peer[]);
+    }
+  }, [me.id, rememberNames]);
+
+  const loadEmergencies = useCallback(async () => {
+    const { data } = await supabase.rpc("emergencies_nearby", { _id: me.id });
+    if (data) setEmergencies(data as Emergency[]);
   }, [me.id]);
 
   // Location + presence heartbeat
@@ -185,6 +246,7 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
           .then(() => {
             setReady(true);
             void loadPeers();
+            void loadEmergencies();
           });
       },
       () => setLocError("Please allow location access so we can show people within 1 km of you."),
@@ -195,17 +257,17 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
       if (lat === null || lng === null) return;
       void supabase.rpc("guest_ping", { _id: me.id, _name: me.name, _lat: lat, _lng: lng });
       void loadPeers();
+      void loadEmergencies();
     }, 20000);
 
     return () => {
       navigator.geolocation.clearWatch(watch);
       clearInterval(beat);
     };
-  }, [me, loadPeers]);
+  }, [me, loadPeers, loadEmergencies]);
 
-  // Messages + requests
+  // Messages
   useEffect(() => {
-    void loadReqs();
     void supabase
       .from("msgs")
       .select("id, from_id, to_id, kind, body, created_at")
@@ -222,44 +284,35 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
         if (m.from_id !== me.id && m.to_id !== me.id) return;
         setMessages((prev) => (prev.some((p) => p.id === m.id) ? prev : [...prev, m]));
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_reqs" }, () => {
-        void loadReqs();
-      })
       .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [me.id, loadReqs]);
+  }, [me.id]);
 
   const thread = useMemo(
     () => (active ? messages.filter((m) => m.from_id === active.id || m.to_id === active.id) : []),
     [messages, active],
   );
 
+  // Recent chats: everyone we have messaged, even if no longer nearby
+  const recent = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of messages) {
+      const other = m.from_id === me.id ? m.to_id : m.from_id;
+      map.set(other, m.created_at);
+    }
+    const nearbyIds = new Set(peers.map((p) => p.id));
+    return [...map.entries()]
+      .filter(([id]) => !nearbyIds.has(id))
+      .sort((a, b) => b[1].localeCompare(a[1]))
+      .map(([id, at]) => ({ id, name: names[id] ?? "Someone nearby", at }));
+  }, [messages, peers, names, me.id]);
+
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [thread.length, active]);
-
-  const reqWith = useCallback(
-    (peerId: string) => reqs.find((r) => (r.from_id === me.id && r.to_id === peerId) || (r.from_id === peerId && r.to_id === me.id)),
-    [reqs, me.id],
-  );
-
-  const sendRequest = async (peerId: string) => {
-    const { error } = await supabase.from("chat_reqs").insert({ from_id: me.id, to_id: peerId, status: "pending" });
-    if (error) {
-      setBusy("Could not send the request");
-      setTimeout(() => setBusy(null), 2500);
-      return;
-    }
-    void loadReqs();
-  };
-
-  const respond = async (id: string, status: "accepted" | "rejected") => {
-    await supabase.from("chat_reqs").update({ status }).eq("id", id);
-    void loadReqs();
-  };
 
   const push = async (kind: Msg["kind"], body: string) => {
     if (!active) return;
@@ -309,6 +362,37 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
     );
   };
 
+  const raise = async (kind: string, extra?: { group: string; hospital: string; urgency: string }) => {
+    setBusy("Sending your emergency alert…");
+    const { error } = await supabase.rpc("create_emergency", {
+      _id: me.id,
+      _name: me.name,
+      _kind: kind,
+      _blood_group: extra?.group ?? null,
+      _hospital: extra?.hospital ?? null,
+      _urgency: extra?.urgency ?? null,
+    });
+    setShowEmergency(false);
+    setBloodForm(null);
+    if (error) {
+      setBusy("Could not send the alert — please allow location first");
+      setTimeout(() => setBusy(null), 3000);
+      return;
+    }
+    setBusy(null);
+    void loadEmergencies();
+  };
+
+  const help = async (id: string) => {
+    await supabase.rpc("offer_help", { _emergency: id, _id: me.id, _name: me.name });
+    void loadEmergencies();
+  };
+
+  const closeEmergency = async (id: string) => {
+    await supabase.rpc("close_emergency", { _emergency: id, _id: me.id });
+    void loadEmergencies();
+  };
+
   const unread = (id: string) => messages.filter((m) => m.from_id === id).length;
   const distanceLabel = (m: number) => (m < 1000 ? `${m} m away` : "1 km away");
 
@@ -330,10 +414,133 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
       <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6">
         {!active ? (
           <>
-            <h1 className="font-display text-3xl tracking-tight">People within 1 km</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Send a chat request — once they accept, you can message each other.
-            </p>
+            <Button
+              variant="destructive"
+              className="w-full py-6 text-base"
+              onClick={() => {
+                setShowEmergency((s) => !s);
+                setBloodForm(null);
+              }}
+            >
+              <Siren className="mr-2 size-5" /> Emergency Help
+            </Button>
+
+            {showEmergency && (
+              <Card className="mt-3 p-4">
+                {!bloodForm ? (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Pick what you need — everyone within 1 km will see it right away.
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {EMERGENCY_KINDS.map((k) => (
+                        <Button
+                          key={k.key}
+                          variant="secondary"
+                          className="justify-start"
+                          onClick={() =>
+                            k.key === "blood"
+                              ? setBloodForm({ group: "", hospital: "", urgency: "Urgent" })
+                              : void raise(k.key)
+                          }
+                        >
+                          {k.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <form
+                    className="space-y-3"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!bloodForm.group.trim() || !bloodForm.hospital.trim()) return;
+                      void raise("blood", bloodForm);
+                    }}
+                  >
+                    <p className="font-display text-lg tracking-tight">🩸 Blood Required</p>
+                    <Input
+                      value={bloodForm.group}
+                      onChange={(e) => setBloodForm({ ...bloodForm, group: e.target.value.slice(0, 10) })}
+                      placeholder="Blood group (e.g. O+)"
+                      required
+                    />
+                    <Input
+                      value={bloodForm.hospital}
+                      onChange={(e) => setBloodForm({ ...bloodForm, hospital: e.target.value.slice(0, 80) })}
+                      placeholder="Hospital name"
+                      required
+                    />
+                    <div className="flex gap-2">
+                      {["Urgent", "Required today"].map((u) => (
+                        <Button
+                          key={u}
+                          type="button"
+                          variant={bloodForm.urgency === u ? "default" : "secondary"}
+                          size="sm"
+                          onClick={() => setBloodForm({ ...bloodForm, urgency: u })}
+                        >
+                          {u}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="submit" variant="destructive">
+                        Send alert
+                      </Button>
+                      <Button type="button" variant="ghost" onClick={() => setBloodForm(null)}>
+                        Back
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </Card>
+            )}
+
+            {emergencies.length > 0 && (
+              <section className="mt-6">
+                <h2 className="font-display text-xl tracking-tight">Emergency alerts near you</h2>
+                <ul className="mt-3 space-y-2">
+                  {emergencies.map((e) => (
+                    <li key={e.id}>
+                      <Card className="border-destructive/40 p-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{kindLabel(e.kind)}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {e.mine ? "You" : e.name} · {distanceLabel(e.distance_meters)} · {timeAgo(e.created_at)}
+                          </span>
+                        </div>
+                        {e.kind === "blood" && (
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Blood group {e.blood_group} · {e.hospital} · {e.urgency}
+                          </p>
+                        )}
+                        <div className="mt-3 flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {e.helper_count} {e.helper_count === 1 ? "person is" : "people are"} responding
+                          </span>
+                          <div className="ml-auto flex gap-2">
+                            {e.mine ? (
+                              <Button size="sm" variant="ghost" onClick={() => closeEmergency(e.id)}>
+                                <X className="mr-1 size-4" /> Close
+                              </Button>
+                            ) : (
+                              <Button size="sm" disabled={e.i_helped} onClick={() => help(e.id)}>
+                                <HeartHandshake className="mr-1 size-4" />
+                                {e.i_helped ? "You are helping" : "I Can Help"}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </Card>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            <h1 className="mt-8 font-display text-3xl tracking-tight">People within 1 km</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Tap chat to start messaging straight away.</p>
 
             {locError ? (
               <p className="py-10 text-center text-sm text-muted-foreground">{locError}</p>
@@ -341,56 +548,58 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
               <p className="py-16 text-center text-muted-foreground">Finding people near you…</p>
             ) : peers.length === 0 ? null : (
               <ul className="mt-6 grid gap-3 sm:grid-cols-2">
-                {peers.map((p) => {
-                  const r = reqWith(p.id);
-                  const accepted = r?.status === "accepted";
-                  const incoming = r && r.status === "pending" && r.to_id === me.id;
-                  const outgoing = r && r.status === "pending" && r.from_id === me.id;
-                  return (
-                    <li key={p.id}>
-                      <Card className="flex items-center gap-3 p-4">
-                        <div className="relative">
-                          <Avatar className="size-11">
-                            <AvatarFallback>{initials(p.name)}</AvatarFallback>
-                          </Avatar>
-                          <span className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-card bg-emerald-500" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium">{p.name}</p>
-                          <p className="text-xs text-muted-foreground">{distanceLabel(p.distance_meters)}</p>
-                        </div>
-                        {accepted ? (
-                          <Button size="sm" onClick={() => setActive(p)}>
-                            Chat
-                            {unread(p.id) > 0 && (
-                              <span className="ml-2 rounded-full bg-primary-foreground/20 px-1.5 text-xs">
-                                {unread(p.id)}
-                              </span>
-                            )}
-                          </Button>
-                        ) : incoming ? (
-                          <div className="flex gap-1">
-                            <Button size="icon" variant="secondary" title="Accept" onClick={() => respond(r!.id, "accepted")}>
-                              <Check className="size-4" />
-                            </Button>
-                            <Button size="icon" variant="ghost" title="Decline" onClick={() => respond(r!.id, "rejected")}>
-                              <X className="size-4" />
-                            </Button>
-                          </div>
-                        ) : outgoing ? (
-                          <span className="text-xs text-muted-foreground">Request sent</span>
-                        ) : r?.status === "rejected" ? (
-                          <span className="text-xs text-muted-foreground">Declined</span>
-                        ) : (
-                          <Button size="sm" variant="secondary" onClick={() => sendRequest(p.id)}>
-                            Request
-                          </Button>
+                {peers.map((p) => (
+                  <li key={p.id}>
+                    <Card className="flex items-center gap-3 p-4">
+                      <div className="relative">
+                        <Avatar className="size-11">
+                          <AvatarFallback>{initials(p.name)}</AvatarFallback>
+                        </Avatar>
+                        <span className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-card bg-emerald-500" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">{p.name}</p>
+                        <p className="text-xs text-muted-foreground">{distanceLabel(p.distance_meters)}</p>
+                      </div>
+                      <Button size="sm" onClick={() => setActive({ id: p.id, name: p.name })}>
+                        Chat
+                        {unread(p.id) > 0 && (
+                          <span className="ml-2 rounded-full bg-primary-foreground/20 px-1.5 text-xs">
+                            {unread(p.id)}
+                          </span>
                         )}
+                      </Button>
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {recent.length > 0 && (
+              <section className="mt-10">
+                <h2 className="font-display text-xl tracking-tight">Recent chats</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  These stay here even when you are no longer near each other.
+                </p>
+                <ul className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {recent.map((r) => (
+                    <li key={r.id}>
+                      <Card className="flex items-center gap-3 p-4">
+                        <Avatar className="size-11">
+                          <AvatarFallback>{initials(r.name)}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium">{r.name}</p>
+                          <p className="text-xs text-muted-foreground">{timeAgo(r.at)}</p>
+                        </div>
+                        <Button size="sm" variant="secondary" onClick={() => setActive({ id: r.id, name: r.name })}>
+                          Open
+                        </Button>
                       </Card>
                     </li>
-                  );
-                })}
-              </ul>
+                  ))}
+                </ul>
+              </section>
             )}
 
             <Card className="mt-10 border-accent/50 p-5">
@@ -518,6 +727,8 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
             </form>
           </div>
         )}
+
+        {!active && busy && <p className="mt-3 text-center text-xs text-muted-foreground">{busy}</p>}
       </main>
     </div>
   );
