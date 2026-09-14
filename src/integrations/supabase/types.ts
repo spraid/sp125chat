@@ -144,6 +144,80 @@ export type Database = {
         }
         Relationships: []
       }
+      emergencies: {
+        Row: {
+          active: boolean
+          blood_group: string | null
+          created_at: string
+          guest_id: string
+          hospital: string | null
+          id: string
+          kind: string
+          lat: number
+          lng: number
+          name: string
+          urgency: string | null
+        }
+        Insert: {
+          active?: boolean
+          blood_group?: string | null
+          created_at?: string
+          guest_id: string
+          hospital?: string | null
+          id?: string
+          kind: string
+          lat: number
+          lng: number
+          name: string
+          urgency?: string | null
+        }
+        Update: {
+          active?: boolean
+          blood_group?: string | null
+          created_at?: string
+          guest_id?: string
+          hospital?: string | null
+          id?: string
+          kind?: string
+          lat?: number
+          lng?: number
+          name?: string
+          urgency?: string | null
+        }
+        Relationships: []
+      }
+      emergency_helpers: {
+        Row: {
+          created_at: string
+          emergency_id: string
+          guest_id: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          emergency_id: string
+          guest_id: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          emergency_id?: string
+          guest_id?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emergency_helpers_emergency_id_fkey"
+            columns: ["emergency_id"]
+            isOneToOne: false
+            referencedRelation: "emergencies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       guests: {
         Row: {
           id: string
@@ -388,10 +462,41 @@ export type Database = {
       block_user: { Args: { _target: string }; Returns: undefined }
       blocked_between: { Args: { _a: string; _b: string }; Returns: boolean }
       cancel_chat_request: { Args: { _request: string }; Returns: undefined }
+      close_emergency: {
+        Args: { _emergency: string; _id: string }
+        Returns: undefined
+      }
+      create_emergency: {
+        Args: {
+          _blood_group?: string
+          _hospital?: string
+          _id: string
+          _kind: string
+          _name: string
+          _urgency?: string
+        }
+        Returns: string
+      }
       delete_my_account: { Args: never; Returns: undefined }
       distance_meters: {
         Args: { lat1: number; lat2: number; lon1: number; lon2: number }
         Returns: number
+      }
+      emergencies_nearby: {
+        Args: { _id: string }
+        Returns: {
+          blood_group: string
+          created_at: string
+          distance_meters: number
+          helper_count: number
+          hospital: string
+          i_helped: boolean
+          id: string
+          kind: string
+          mine: boolean
+          name: string
+          urgency: string
+        }[]
       }
       get_nearby_users: {
         Args: never
@@ -427,6 +532,10 @@ export type Database = {
       is_conversation_member: {
         Args: { _conv: string; _user: string }
         Returns: boolean
+      }
+      offer_help: {
+        Args: { _emergency: string; _id: string; _name: string }
+        Returns: undefined
       }
       purge_old_msgs: { Args: never; Returns: undefined }
       respond_chat_request: {
