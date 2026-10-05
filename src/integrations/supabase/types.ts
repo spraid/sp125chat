@@ -498,6 +498,14 @@ export type Database = {
           urgency: string
         }[]
       }
+      emergency_live_location: {
+        Args: { _emergency: string; _id: string }
+        Returns: {
+          lat: number
+          lng: number
+          updated_at: string
+        }[]
+      }
       get_nearby_users: {
         Args: never
         Returns: {
