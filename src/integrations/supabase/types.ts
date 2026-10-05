@@ -220,6 +220,7 @@ export type Database = {
       }
       guests: {
         Row: {
+          avatar: string | null
           id: string
           last_seen: string
           lat: number | null
@@ -227,6 +228,7 @@ export type Database = {
           name: string
         }
         Insert: {
+          avatar?: string | null
           id: string
           last_seen?: string
           lat?: number | null
@@ -234,6 +236,7 @@ export type Database = {
           name: string
         }
         Update: {
+          avatar?: string | null
           id?: string
           last_seen?: string
           lat?: number | null
@@ -498,6 +501,13 @@ export type Database = {
           urgency: string
         }[]
       }
+      emergency_helpers_list: {
+        Args: { _emergency: string; _id: string }
+        Returns: {
+          guest_id: string
+          name: string
+        }[]
+      }
       emergency_live_location: {
         Args: { _emergency: string; _id: string }
         Returns: {
@@ -520,6 +530,15 @@ export type Database = {
       guest_ping: {
         Args: { _id: string; _lat: number; _lng: number; _name: string }
         Returns: undefined
+      }
+      guests_info: {
+        Args: { _id: string; _ids: string[] }
+        Returns: {
+          avatar: string
+          distance_meters: number
+          id: string
+          name: string
+        }[]
       }
       guests_nearby: {
         Args: { _id: string }
@@ -551,6 +570,10 @@ export type Database = {
         Returns: string
       }
       send_chat_request: { Args: { _receiver: string }; Returns: string }
+      set_guest_avatar: {
+        Args: { _avatar: string; _id: string }
+        Returns: undefined
+      }
       shares_context: { Args: { _a: string; _b: string }; Returns: boolean }
       update_my_location: {
         Args: { _lat: number; _lng: number }
