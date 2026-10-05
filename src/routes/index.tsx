@@ -16,7 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { initials, clockTime, timeAgo } from "@/lib/format";
 import catAsset from "@/assets/cat.jpg.asset.json";
 
@@ -43,6 +43,8 @@ export const Route = createFileRoute("/")({
 });
 
 type Peer = { id: string; name: string; distance_meters: number };
+type GuestInfo = { id: string; name: string; avatar: string | null; distance_meters: number | null };
+const AVATAR_KEY = "catchat_avatar";
 type Msg = {
   id: string;
   from_id: string;
@@ -84,6 +86,14 @@ const kindLabel = (k: string) => EMERGENCY_KINDS.find((e) => e.key === k)?.label
 
 function LobbyPage() {
   const [nameInput, setNameInput] = useState("");
+  const [avatar, setAvatar] = useState("");
+  useEffect(() => {
+    try {
+      setAvatar(localStorage.getItem(AVATAR_KEY) ?? "");
+    } catch {
+      /* ignore */
+    }
+  }, []);
   const [me, setMe] = useState<{ id: string; name: string } | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -141,6 +151,31 @@ function LobbyPage() {
                 setMe({ id, name: n });
               }}
             >
+              <label className="flex cursor-pointer items-center gap-3">
+                <Avatar className="size-14">
+                  {avatar && <AvatarImage src={avatar} alt="Your profile photo" />}
+                  <AvatarFallback>{nameInput ? initials(nameInput) : "+"}</AvatarFallback>
+                </Avatar>
+                <span className="text-sm text-muted-foreground">
+                  {avatar ? "Change profile photo" : "Add profile photo (optional)"}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const url = await compressImage(f, 160);
+                    setAvatar(url);
+                    try {
+                      localStorage.setItem(AVATAR_KEY, url);
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                />
+              </label>
               <Input
                 value={nameInput}
                 onChange={(e) => setNameInput(e.target.value)}
@@ -187,6 +222,8 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
   const [messages, setMessages] = useState<Msg[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [active, setActive] = useState<{ id: string; name: string } | null>(null);
+  const [info, setInfo] = useState<Record<string, GuestInfo>>({});
+  const [helpers, setHelpers] = useState<Record<string, { guest_id: string; name: string }[]>>({});
   const [text, setText] = useState("");
   const [locError, setLocError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -224,7 +261,16 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
 
   const loadEmergencies = useCallback(async () => {
     const { data } = await supabase.rpc("emergencies_nearby", { _id: me.id });
-    if (data) setEmergencies(data as Emergency[]);
+    if (!data) return;
+    setEmergencies(data as Emergency[]);
+    const mine = (data as Emergency[]).filter((e) => e.mine && e.helper_count > 0);
+    const entries = await Promise.all(
+      mine.map(async (e) => {
+        const { data: h } = await supabase.rpc("emergency_helpers_list", { _emergency: e.id, _id: me.id });
+        return [e.id, (h ?? []) as { guest_id: string; name: string }[]] as const;
+      }),
+    );
+    setHelpers(Object.fromEntries(entries));
   }, [me.id]);
 
   // Location + presence heartbeat
@@ -244,12 +290,22 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
         void supabase
           .rpc("guest_ping", { _id: me.id, _name: me.name, _lat: lat, _lng: lng })
           .then(() => {
+            if (!avatarSent) {
+              avatarSent = true;
+              let av = "";
+              try {
+                av = localStorage.getItem(AVATAR_KEY) ?? "";
+              } catch {
+                /* ignore */
+              }
+              if (av) void supabase.rpc("set_guest_avatar", { _id: me.id, _avatar: av });
+            }
             setReady(true);
             void loadPeers();
             void loadEmergencies();
           });
       },
-      () => setLocError("Please allow location access so we can show people within 1 km of you."),
+      () => setLocError("Please allow location access so we can show people near you."),
       { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 },
     );
 
@@ -297,6 +353,12 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
   );
 
   // Recent chats: everyone we have messaged, even if no longer nearby
+  const recentIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const m of messages) s.add(m.from_id === me.id ? m.to_id : m.from_id);
+    return [...s];
+  }, [messages, me.id]);
+
   const recent = useMemo(() => {
     const map = new Map<string, string>();
     for (const m of messages) {
@@ -305,10 +367,24 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
     }
     const nearbyIds = new Set(peers.map((p) => p.id));
     return [...map.entries()]
-      .filter(([id]) => !nearbyIds.has(id))
+      .filter(([id]) => {
+        const d = info[id]?.distance_meters;
+        return !nearbyIds.has(id) && d != null && d <= 5000;
+      })
       .sort((a, b) => b[1].localeCompare(a[1]))
-      .map(([id, at]) => ({ id, name: names[id] ?? "Someone nearby", at }));
-  }, [messages, peers, names, me.id]);
+      .map(([id, at]) => ({ id, name: info[id]?.name ?? names[id] ?? "Guest", at }));
+  }, [messages, peers, names, info, me.id]);
+
+  useEffect(() => {
+    const ids = [...new Set([...recentIds, ...peers.map((p) => p.id)])];
+    if (ids.length === 0) return;
+    void supabase.rpc("guests_info", { _id: me.id, _ids: ids }).then(({ data }) => {
+      if (!data) return;
+      const next: Record<string, GuestInfo> = {};
+      for (const g of data) next[g.id] = g as GuestInfo;
+      setInfo(next);
+    });
+  }, [recentIds, peers, me.id]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -552,6 +628,22 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
                             )}
                           </div>
                         </div>
+                        {e.mine && (helpers[e.id]?.length ?? 0) > 0 && (
+                          <ul className="mt-3 space-y-2 border-t pt-3">
+                            {helpers[e.id]!.map((h) => (
+                              <li key={h.guest_id} className="flex items-center gap-2">
+                                <span className="flex-1 truncate text-sm">{h.name} can help</span>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => setActive({ id: h.guest_id, name: h.name })}
+                                >
+                                  Chat
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </Card>
                     </li>
                   ))}
@@ -559,7 +651,7 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
               </section>
             )}
 
-            <h1 className="mt-8 font-display text-3xl tracking-tight">People within 1 km</h1>
+            <h1 className="mt-8 font-display text-3xl tracking-tight">People online</h1>
             <p className="mt-1 text-sm text-muted-foreground">Tap chat to start messaging straight away.</p>
 
             {locError ? (
@@ -573,6 +665,7 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
                     <Card className="flex items-center gap-3 p-4">
                       <div className="relative">
                         <Avatar className="size-11">
+                          {info[p.id]?.avatar && <AvatarImage src={info[p.id]!.avatar!} alt={p.name} />}
                           <AvatarFallback>{initials(p.name)}</AvatarFallback>
                         </Avatar>
                         <span className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-card bg-emerald-500" />
@@ -598,14 +691,13 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
             {recent.length > 0 && (
               <section className="mt-10">
                 <h2 className="font-display text-xl tracking-tight">Recent chats</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  These stay here even when you are no longer near each other.
-                </p>
+                <p className="mt-1 text-sm text-muted-foreground">People you chatted with who are within 5 km.</p>
                 <ul className="mt-3 grid gap-3 sm:grid-cols-2">
                   {recent.map((r) => (
                     <li key={r.id}>
                       <Card className="flex items-center gap-3 p-4">
                         <Avatar className="size-11">
+                          {info[r.id]?.avatar && <AvatarImage src={info[r.id]!.avatar!} alt={r.name} />}
                           <AvatarFallback>{initials(r.name)}</AvatarFallback>
                         </Avatar>
                         <div className="min-w-0 flex-1">
@@ -643,6 +735,7 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
                 <ArrowLeft className="mr-2 size-4" /> Back
               </Button>
               <Avatar className="size-8">
+                {info[active.id]?.avatar && <AvatarImage src={info[active.id]!.avatar!} alt={active.name} />}
                 <AvatarFallback>{initials(active.name)}</AvatarFallback>
               </Avatar>
               <p className="font-medium">{active.name}</p>
