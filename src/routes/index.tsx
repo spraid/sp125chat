@@ -394,7 +394,7 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
     const loc = data?.[0];
     if (!loc) {
       win?.close();
-      toast.error("Location not available right now");
+      alert("Location not available right now");
       return;
     }
     const url = `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
