@@ -368,9 +368,9 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
       _id: me.id,
       _name: me.name,
       _kind: kind,
-      _blood_group: extra?.group,
-      _hospital: extra?.hospital,
-      _urgency: extra?.urgency,
+      _blood_group: extra?.group ?? "",
+      _hospital: extra?.hospital ?? "",
+      _urgency: extra?.urgency ?? "",
     });
     setShowEmergency(false);
     setBloodForm(null);
