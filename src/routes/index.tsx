@@ -368,9 +368,9 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
       _id: me.id,
       _name: me.name,
       _kind: kind,
-      _blood_group: extra?.group ?? null,
-      _hospital: extra?.hospital ?? null,
-      _urgency: extra?.urgency ?? null,
+      _blood_group: extra?.group ?? "",
+      _hospital: extra?.hospital ?? "",
+      _urgency: extra?.urgency ?? "",
     });
     setShowEmergency(false);
     setBloodForm(null);
@@ -388,13 +388,28 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
     void loadEmergencies();
   };
 
+  const openLive = async (id: string) => {
+    const win = window.open("", "_blank");
+    const { data } = await supabase.rpc("emergency_live_location", { _emergency: id, _id: me.id });
+    const loc = data?.[0];
+    if (!loc) {
+      win?.close();
+      alert("Location not available right now");
+      return;
+    }
+    const url = `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
+    if (win) win.location.href = url;
+    else window.location.href = url;
+  };
+
   const closeEmergency = async (id: string) => {
     await supabase.rpc("close_emergency", { _emergency: id, _id: me.id });
     void loadEmergencies();
   };
 
   const unread = (id: string) => messages.filter((m) => m.from_id === id).length;
-  const distanceLabel = (m: number) => (m < 1000 ? `${m} m away` : "1 km away");
+  const distanceLabel = (m: number) =>
+    m < 1000 ? `${m} m away` : `${(m / 1000).toFixed(1)} km away`;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -525,10 +540,15 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
                                 <X className="mr-1 size-4" /> Close
                               </Button>
                             ) : (
-                              <Button size="sm" disabled={e.i_helped} onClick={() => help(e.id)}>
-                                <HeartHandshake className="mr-1 size-4" />
-                                {e.i_helped ? "You are helping" : "I Can Help"}
-                              </Button>
+                              e.i_helped ? (
+                                <Button size="sm" onClick={() => openLive(e.id)}>
+                                  <HeartHandshake className="mr-1 size-4" /> Live location
+                                </Button>
+                              ) : (
+                                <Button size="sm" onClick={() => help(e.id)}>
+                                  <HeartHandshake className="mr-1 size-4" /> I Can Help
+                                </Button>
+                              )
                             )}
                           </div>
                         </div>
