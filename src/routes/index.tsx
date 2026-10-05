@@ -197,9 +197,8 @@ function LobbyPage() {
   return <Lobby me={me} onSignOut={signOut} />;
 }
 
-async function compressImage(file: File): Promise<string> {
+async function compressImage(file: File, max = 800): Promise<string> {
   const bitmap = await createImageBitmap(file);
-  const max = 800;
   const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bitmap.width * scale);
