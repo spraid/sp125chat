@@ -7,7 +7,9 @@
 - [x] Profile, settings, blocked, report pages
 - [x] Admin dashboard page
 - [x] Private chat detail page
-- [ ] Remove "Create account" option from auth page (sign-in only)
-- [ ] Show all online users on Nearby page (not just within 1 km)
-- [ ] Fix typecheck/build errors (in progress)
+- [x] Remove account access and use a public name-based lobby
+- [x] Show online users and recent chats without a distance limit
+- [x] Replace Cat Chat branding with the current person's name and photo
+- [x] Use sharp borders with no shadows
+- [x] Add browser notifications for messages and emergency activity
 - [ ] Runtime verification on preview

@@ -35,7 +35,7 @@
 }
 
 :root {
-  --radius: 0.875rem;
+  --radius: 0rem;
   --background: oklch(0.97 0.015 250);
   --foreground: oklch(0.22 0.07 260);
   --card: oklch(1 0 0);
@@ -82,6 +82,8 @@
 @layer base {
   * {
     border-color: var(--color-border);
+    border-radius: 0 !important;
+    box-shadow: none !important;
   }
   body {
     background-color: var(--color-background);
