@@ -378,27 +378,8 @@ function Lobby({ me, avatar, onSignOut }: { me: { id: string; name: string }; av
     [messages, active],
   );
 
-  // Recent chats remain available regardless of distance.
-  const recentIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const m of messages) s.add(m.from_id === me.id ? m.to_id : m.from_id);
-    return [...s];
-  }, [messages, me.id]);
-
-  const recent = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const m of messages) {
-      const other = m.from_id === me.id ? m.to_id : m.from_id;
-      map.set(other, m.created_at);
-    }
-    return [...map.entries()]
-      .filter(([id]) => !peers.some((peer) => peer.id === id))
-      .sort((a, b) => b[1].localeCompare(a[1]))
-      .map(([id, at]) => ({ id, name: info[id]?.name ?? names[id] ?? "Guest", at }));
-  }, [messages, peers, names, info, me.id]);
-
   useEffect(() => {
-    const ids = [...new Set([...recentIds, ...peers.map((p) => p.id)])];
+    const ids = [...new Set(peers.map((p) => p.id))];
     if (ids.length === 0) return;
     void supabase.rpc("guests_info", { _id: me.id, _ids: ids }).then(({ data }) => {
       if (!data) return;
@@ -406,7 +387,7 @@ function Lobby({ me, avatar, onSignOut }: { me: { id: string; name: string }; av
       for (const g of data) next[g.id] = g as GuestInfo;
       setInfo(next);
     });
-  }, [recentIds, peers, me.id]);
+  }, [peers, me.id]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -720,32 +701,6 @@ function Lobby({ me, avatar, onSignOut }: { me: { id: string; name: string }; av
                   </li>
                 ))}
               </ul>
-            )}
-
-            {recent.length > 0 && (
-              <section className="mt-10">
-                <h2 className="font-display text-xl tracking-tight">Recent chats</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Your previous conversations, regardless of distance.</p>
-                <ul className="mt-3 grid gap-3 sm:grid-cols-2">
-                  {recent.map((r) => (
-                    <li key={r.id}>
-                      <Card className="flex items-center gap-3 p-4">
-                        <Avatar className="size-11">
-                          {info[r.id]?.avatar && <AvatarImage src={info[r.id]!.avatar!} alt={r.name} />}
-                          <AvatarFallback>{initials(r.name)}</AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium">{r.name}</p>
-                          <p className="text-xs text-muted-foreground">{timeAgo(r.at)}</p>
-                        </div>
-                        <Button size="sm" variant="secondary" onClick={() => setActive({ id: r.id, name: r.name })}>
-                          Open
-                        </Button>
-                      </Card>
-                    </li>
-                  ))}
-                </ul>
-              </section>
             )}
 
             <Card className="mt-10 border-accent/50 p-5">

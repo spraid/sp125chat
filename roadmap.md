@@ -12,4 +12,6 @@
 - [x] Replace Cat Chat branding with the current person's name and photo
 - [x] Use sharp borders with no shadows
 - [x] Add browser notifications for messages and emergency activity
+- [x] Permanently clear existing messages and remove Recent Chats
+- [x] Restore subtle border radius while keeping shadows removed
 - [x] Runtime verification on preview
