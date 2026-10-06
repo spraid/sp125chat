@@ -11,6 +11,7 @@ import {
   Siren,
   HeartHandshake,
   X,
+  Bell,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -23,17 +24,17 @@ import catAsset from "@/assets/cat.jpg.asset.json";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Cat Chat — chat and get help within 1 km" },
+      { title: "Nearby Chat — message people online" },
       {
         name: "description",
         content:
-          "See people using this site within 1 km of you, message them with photos, emojis and your location, and raise an emergency help request nearby.",
+          "See people using this site, message them with photos, emojis and your location, and raise an emergency help request.",
       },
-      { property: "og:title", content: "Cat Chat — chat and get help within 1 km" },
+      { property: "og:title", content: "Nearby Chat — message people online" },
       {
         property: "og:description",
         content:
-          "See people using this site within 1 km of you, message them with photos, emojis and your location, and raise an emergency help request nearby.",
+          "See people using this site, message them with photos, emojis and your location, and raise an emergency help request.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -194,7 +195,7 @@ function LobbyPage() {
     );
   }
 
-  return <Lobby me={me} onSignOut={signOut} />;
+  return <Lobby me={me} avatar={avatar} onSignOut={signOut} />;
 }
 
 async function compressImage(file: File, max = 800): Promise<string> {
@@ -216,7 +217,7 @@ function readPeerNames(): Record<string, string> {
   }
 }
 
-function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut: () => void }) {
+function Lobby({ me, avatar, onSignOut }: { me: { id: string; name: string }; avatar: string; onSignOut: () => void }) {
   const [peers, setPeers] = useState<Peer[]>([]);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
@@ -230,9 +231,18 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
   const [busy, setBusy] = useState<string | null>(null);
   const [emergencies, setEmergencies] = useState<Emergency[]>([]);
   const [showEmergency, setShowEmergency] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">(
+    "Notification" in globalThis ? Notification.permission : "unsupported",
+  );
   const [bloodForm, setBloodForm] = useState<{ group: string; hospital: string; urgency: string } | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const emergencySnapshot = useRef<Map<string, number> | null>(null);
+
+  const showNotification = useCallback((title: string, body: string) => {
+    if (!("Notification" in globalThis) || Notification.permission !== "granted" || !document.hidden) return;
+    new Notification(title, avatar ? { body, icon: avatar } : { body });
+  }, [avatar]);
 
   useEffect(() => setNames(readPeerNames()), []);
 
@@ -261,8 +271,20 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
   const loadEmergencies = useCallback(async () => {
     const { data } = await supabase.rpc("emergencies_nearby", { _id: me.id });
     if (!data) return;
-    setEmergencies(data as Emergency[]);
-    const mine = (data as Emergency[]).filter((e) => e.mine && e.helper_count > 0);
+    const incoming = data as Emergency[];
+    const previous = emergencySnapshot.current;
+    if (previous) {
+      for (const emergency of incoming) {
+        if (!previous.has(emergency.id) && !emergency.mine) {
+          showNotification("Emergency help requested", `${kindLabel(emergency.kind)} · ${distanceLabel(emergency.distance_meters)}`);
+        } else if (emergency.mine && emergency.helper_count > (previous.get(emergency.id) ?? 0)) {
+          showNotification("Someone can help", `${emergency.helper_count} people are responding to your request.`);
+        }
+      }
+    }
+    emergencySnapshot.current = new Map(incoming.map((emergency) => [emergency.id, emergency.helper_count]));
+    setEmergencies(incoming);
+    const mine = incoming.filter((e) => e.mine && e.helper_count > 0);
     const entries = await Promise.all(
       mine.map(async (e) => {
         const { data: h } = await supabase.rpc("emergency_helpers_list", { _emergency: e.id, _id: me.id });
@@ -270,7 +292,7 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
       }),
     );
     setHelpers(Object.fromEntries(entries));
-  }, [me.id]);
+  }, [me.id, showNotification]);
 
   // Location + presence heartbeat
   useEffect(() => {
@@ -280,6 +302,7 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
     }
     let lat: number | null = null;
     let lng: number | null = null;
+    let avatarSent = false;
 
     const watch = navigator.geolocation.watchPosition(
       (pos) => {
@@ -338,20 +361,24 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
         const m = row as Msg;
         if (m.from_id !== me.id && m.to_id !== me.id) return;
         setMessages((prev) => (prev.some((p) => p.id === m.id) ? prev : [...prev, m]));
+        if (m.from_id !== me.id) {
+          const sender = readPeerNames()[m.from_id] ?? "New message";
+          showNotification(sender, m.kind === "text" ? m.body.slice(0, 120) : m.kind === "image" ? "Sent a photo" : "Shared a location");
+        }
       })
       .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [me.id]);
+  }, [me.id, showNotification]);
 
   const thread = useMemo(
     () => (active ? messages.filter((m) => m.from_id === active.id || m.to_id === active.id) : []),
     [messages, active],
   );
 
-  // Recent chats: everyone we have messaged, even if no longer nearby
+  // Recent chats remain available regardless of distance.
   const recentIds = useMemo(() => {
     const s = new Set<string>();
     for (const m of messages) s.add(m.from_id === me.id ? m.to_id : m.from_id);
@@ -364,12 +391,8 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
       const other = m.from_id === me.id ? m.to_id : m.from_id;
       map.set(other, m.created_at);
     }
-    const nearbyIds = new Set(peers.map((p) => p.id));
     return [...map.entries()]
-      .filter(([id]) => {
-        const d = info[id]?.distance_meters;
-        return !nearbyIds.has(id) && d != null && d <= 5000;
-      })
+      .filter(([id]) => !peers.some((peer) => peer.id === id))
       .sort((a, b) => b[1].localeCompare(a[1]))
       .map(([id, at]) => ({ id, name: info[id]?.name ?? names[id] ?? "Guest", at }));
   }, [messages, peers, names, info, me.id]);
@@ -490,11 +513,23 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
     <div className="flex min-h-screen flex-col bg-background">
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/85 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex w-full max-w-4xl items-center gap-2">
-          <img src={catAsset.url} alt="" className="size-8 rounded-lg object-cover" />
-          <span className="font-display text-lg tracking-tight">Cat Chat</span>
-          <span className="ml-auto hidden text-sm text-muted-foreground sm:inline">
-            You are <strong className="text-foreground">{me.name}</strong>
-          </span>
+          <Avatar className="size-9">
+            {active ? info[active.id]?.avatar && <AvatarImage src={info[active.id]?.avatar ?? undefined} alt={active.name} /> : avatar && <AvatarImage src={avatar} alt={me.name} />}
+            <AvatarFallback>{initials(active?.name ?? me.name)}</AvatarFallback>
+          </Avatar>
+          <span className="min-w-0 truncate font-display text-lg tracking-tight">{active?.name ?? me.name}</span>
+          {notificationPermission !== "granted" && notificationPermission !== "unsupported" && (
+            <Button
+              className="ml-auto"
+              variant="ghost"
+              size="sm"
+              onClick={async () => setNotificationPermission(await Notification.requestPermission())}
+              title="Enable browser notifications"
+            >
+              <Bell className="size-4" />
+              <span className="hidden sm:inline">Enable alerts</span>
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={onSignOut} title="Change name">
             <LogOut className="size-4" />
           </Button>
@@ -520,7 +555,7 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
                 {!bloodForm ? (
                   <>
                     <p className="text-sm text-muted-foreground">
-                      Pick what you need — everyone within 1 km will see it right away.
+                      Pick what you need — everyone online will see it right away.
                     </p>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       {EMERGENCY_KINDS.map((k) => (
@@ -690,7 +725,7 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
             {recent.length > 0 && (
               <section className="mt-10">
                 <h2 className="font-display text-xl tracking-tight">Recent chats</h2>
-                <p className="mt-1 text-sm text-muted-foreground">People you chatted with who are within 5 km.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Your previous conversations, regardless of distance.</p>
                 <ul className="mt-3 grid gap-3 sm:grid-cols-2">
                   {recent.map((r) => (
                     <li key={r.id}>
@@ -720,7 +755,7 @@ function Lobby({ me, onSignOut }: { me: { id: string; name: string }; onSignOut:
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button asChild variant="secondary" size="sm">
-                  <a href="mailto:prasanthkumar99963@gmail.com?subject=Cat%20Chat%20feedback">
+                  <a href="mailto:prasanthkumar99963@gmail.com?subject=Nearby%20Chat%20feedback">
                     <Mail className="mr-2 size-4" /> prasanthkumar99963@gmail.com
                   </a>
                 </Button>
