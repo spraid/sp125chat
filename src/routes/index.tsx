@@ -241,7 +241,7 @@ function Lobby({ me, avatar, onSignOut }: { me: { id: string; name: string }; av
 
   const showNotification = useCallback((title: string, body: string) => {
     if (!("Notification" in globalThis) || Notification.permission !== "granted" || !document.hidden) return;
-    new Notification(title, { body, icon: avatar || undefined });
+    new Notification(title, avatar ? { body, icon: avatar } : { body });
   }, [avatar]);
 
   useEffect(() => setNames(readPeerNames()), []);
@@ -302,6 +302,7 @@ function Lobby({ me, avatar, onSignOut }: { me: { id: string; name: string }; av
     }
     let lat: number | null = null;
     let lng: number | null = null;
+    let avatarSent = false;
 
     const watch = navigator.geolocation.watchPosition(
       (pos) => {
