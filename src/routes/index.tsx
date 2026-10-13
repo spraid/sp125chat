@@ -536,7 +536,7 @@ function Lobby({ me, avatar, onSignOut }: { me: { id: string; name: string }; av
                 {!bloodForm ? (
                   <>
                     <p className="text-sm text-muted-foreground">
-                      Pick what you need — everyone online will see it right away.
+                      Pick what you need — everyone within 10 km will see it right away.
                     </p>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       {EMERGENCY_KINDS.map((k) => (
